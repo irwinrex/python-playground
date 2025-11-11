@@ -1,0 +1,51 @@
+version: "3.9"
+
+networks:
+  django:
+    driver: bridge # overlay is for Swarm; bridge works for local compose
+
+services:
+  alloy-agent:
+    image: grafana/alloy:v1.11.0
+    container_name: alloy-agent
+    restart: unless-stopped
+    environment:
+      ALLOY_CONFIG: /etc/alloy/config.hcl
+      ALLOY_LOG_LEVEL: info
+      ALLOY_BASE_URL: "https://alloy.ebsworx.dev"
+      ALLOY_AUTH_TOKEN: "your-secret-token-here-12345"
+      ALLOY_TLS_INSECURE: "false"
+      SERVICE_NAME: "django-app"
+      ENVIRONMENT: "local"
+      HOST_NAME: "mac-local"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./alloy.hcl:/etc/alloy/config.hcl:ro
+      - ./alloy-data:/var/lib/alloy
+    networks:
+      - django
+    expose:
+      - "4317" # OTLP/gRPC receiver
+      - "4318" # OTLP/HTTP (optional)
+
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: django-app
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: alloy.settings
+      OTEL_SERVICE_NAME: django-test
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy-agent:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "0.1"
+    networks:
+      - django
+    ports:
+      - "8000:8000"
