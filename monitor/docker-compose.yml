@@ -12,7 +12,7 @@ services:
     environment:
       ALLOY_CONFIG: /etc/alloy/config.hcl
       ALLOY_LOG_LEVEL: info
-      ALLOY_BASE_URL: "https://alloy.ebsworx.dev"
+      ALLOY_BASE_URL: "https://alloy.test.dev"
       ALLOY_AUTH_TOKEN: "your-secret-token-here-12345"
       ALLOY_TLS_INSECURE: "false"
       SERVICE_NAME: "django-app"
