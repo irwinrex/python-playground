@@ -1,1 +1,4 @@
 train/__*
+*.pyc
+alloy-data
+db.sqlite3
