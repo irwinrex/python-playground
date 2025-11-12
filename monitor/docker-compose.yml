@@ -1,23 +1,17 @@
-version: "3.9"
-
 networks:
   django:
-    driver: bridge # overlay is for Swarm; bridge works for local compose
+    driver: bridge
 
 services:
   alloy-agent:
     image: grafana/alloy:v1.11.0
     container_name: alloy-agent
     restart: unless-stopped
+    command: ["run", "/etc/alloy/config.hcl"]
     environment:
-      ALLOY_CONFIG: /etc/alloy/config.hcl
-      ALLOY_LOG_LEVEL: info
-      ALLOY_BASE_URL: "https://alloy.test.dev"
-      ALLOY_AUTH_TOKEN: "your-secret-token-here-12345"
+      ALLOY_BASE_URL: https://alloy.test.dev
+      ALLOY_AUTH_TOKEN: your-secret-token-here-12345
       ALLOY_TLS_INSECURE: "false"
-      SERVICE_NAME: "django-app"
-      ENVIRONMENT: "local"
-      HOST_NAME: "mac-local"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./alloy.hcl:/etc/alloy/config.hcl:ro
@@ -25,8 +19,8 @@ services:
     networks:
       - django
     expose:
-      - "4317" # OTLP/gRPC receiver
-      - "4318" # OTLP/HTTP (optional)
+      - "4317"
+      - "4318"
 
   django:
     build:

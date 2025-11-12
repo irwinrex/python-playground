@@ -1,85 +1,127 @@
-// ==========================================
-// Grafana Alloy v1.11.0
-// Django → Local Alloy → Remote Alloy / LGTM
-// ==========================================
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
 
-// --- Receivers ---
-// Accepts OTLP data (gRPC and HTTP) from Django OpenTelemetry SDK
-otelcol.receiver.otlp "from_django" {
+discovery.relabel "filter" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "^(django.*|myapp.*)$"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    regex         = "(.*)"
+    target_label  = "__path__"
+    replacement   = "/var/lib/docker/containers/$1/$1-json.log"
+    action        = "replace"
+  }
+}
+
+loki.source.file "docker_logs" {
+  targets    = discovery.relabel.filter.targets
+  forward_to = [loki.write.alloy_logs.receiver]
+}
+
+otelcol.receiver.otlp "django_app" {
   grpc {
     endpoint = "0.0.0.0:4317"
   }
+
   http {
     endpoint = "0.0.0.0:4318"
   }
+
+  output {
+    logs    = [otelcol.processor.batch.alloy_batch.input]
+    metrics = [otelcol.processor.batch.alloy_batch.input]
+    traces  = [otelcol.processor.batch.alloy_batch.input]
+  }
 }
 
-// Collect logs from Django containers via Docker socket
-loki.source.docker "django_logs" {
-  docker_url         = "unix:///var/run/docker.sock"
-  containers         = ["django*"]
-  labels             = { job = "django_logs" }
-  forward_to         = [loki.write.alloy_logs.receiver]
-}
-
-// --- Processors ---
-otelcol.processor.batch "default" {
-  timeout = "5s"
+otelcol.processor.batch "alloy_batch" {
+  timeout         = "5s"
   send_batch_size = 2000
-}
 
-// --- Exporters (HTTP/Protobuf over HTTPS) ---
-// 1️⃣ Traces
-otelcol.exporter.otlphttp "alloy_traces" {
-  client {
-    endpoint = "${env("ALLOY_BASE_URL")}/v1/traces"
-    headers = {
-      "Authorization" = "Bearer ${env("ALLOY_AUTH_TOKEN")}"
-    }
-    tls {
-      insecure = env("ALLOY_TLS_INSECURE") == "true"
-    }
+  output {
+    logs    = [otelcol.exporter.loki.alloy_loki_exporter.input]
+    metrics = [otelcol.exporter.otlp.metrics_exporter.input]
+    traces  = [otelcol.exporter.otlp.traces_exporter.input]
   }
 }
 
-// 2️⃣ Metrics
-otelcol.exporter.otlphttp "alloy_metrics" {
-  client {
-    endpoint = "${env("ALLOY_BASE_URL")}/v1/metrics"
-    headers = {
-      "Authorization" = "Bearer ${env("ALLOY_AUTH_TOKEN")}"
-    }
-    tls {
-      insecure = env("ALLOY_TLS_INSECURE") == "true"
-    }
-  }
+otelcol.exporter.loki "alloy_loki_exporter" {
+  forward_to = [loki.write.alloy_logs.receiver]
 }
 
-// 3️⃣ Logs
 loki.write "alloy_logs" {
   endpoint {
-    url = "${env("ALLOY_BASE_URL")}/v1/logs"
+    url = env("ALLOY_BASE_URL") + "/v1/logs"
   }
+
   headers = {
-    "Authorization" = "Bearer ${env("ALLOY_AUTH_TOKEN")}"
+    "Authorization" = env("ALLOY_AUTH_HEADER"),
   }
+
   tls {
-    insecure = env("ALLOY_TLS_INSECURE") == "true"
+    insecure = (env("ALLOY_TLS_INSECURE") == "true")
   }
 }
 
-// --- Pipelines ---
-otelcol.service "main" {
-  pipelines = {
-    traces = [
-      otelcol.receiver.otlp.from_django,
-      otelcol.processor.batch.default,
-      otelcol.exporter.otlphttp.alloy_traces,
-    ]
-    metrics = [
-      otelcol.receiver.otlp.from_django,
-      otelcol.processor.batch.default,
-      otelcol.exporter.otlphttp.alloy_metrics,
-    ]
+otelcol.exporter.otlp "metrics_exporter" {
+  client {
+    endpoint = env("ALLOY_BASE_URL") + "/v1/metrics"
+
+    headers = {
+      "Authorization" = env("ALLOY_AUTH_HEADER"),
+    }
+
+    tls {
+      insecure = (env("ALLOY_TLS_INSECURE") == "true")
+    }
+  }
+
+  sending_queue {
+    enabled       = true
+    queue_size    = 20000
+    num_consumers = 4
+    storage       = "persistent"
+  }
+
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "5s"
+    max_interval     = "30s"
+    max_elapsed_time = "15m"
+  }
+}
+
+otelcol.exporter.otlp "traces_exporter" {
+  client {
+    endpoint = env("ALLOY_BASE_URL") + "/v1/traces"
+
+    headers = {
+      "Authorization" = env("ALLOY_AUTH_HEADER"),
+    }
+
+    tls {
+      insecure = (env("ALLOY_TLS_INSECURE") == "true")
+    }
+  }
+
+  sending_queue {
+    enabled       = true
+    queue_size    = 20000
+    num_consumers = 4
+    storage       = "persistent"
+  }
+
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "5s"
+    max_interval     = "30s"
+    max_elapsed_time = "15m"
   }
 }
