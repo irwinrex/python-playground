@@ -17,7 +17,7 @@ otelcol.receiver.otlp "django_otel" {
 // -------------------------------------------------------------
 otelcol.processor.resourcedetection "add_env_label" {
   detectors = ["static"]
-  static {
+  static_resource {
     attributes = {
       "app_env" = "local",
     }
