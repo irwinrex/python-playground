@@ -6,21 +6,28 @@ services:
   alloy-agent:
     image: grafana/alloy:v1.11.0
     container_name: alloy-agent
-    restart: unless-stopped
+    restart: "no"
     command: ["run", "/etc/alloy/config.hcl"]
     environment:
-      ALLOY_BASE_URL: https://alloy.test.dev
-      ALLOY_AUTH_TOKEN: your-secret-token-here-12345
-      ALLOY_TLS_INSECURE: "false"
+      - ALLOY_LOKI_URL=https://monitoring.ebsworx.dev/loki/loki/api/v1/push
+      - ALLOY_MIMIR_URL=https://monitoring.ebsworx.dev/mimir/api/v1/push
+      - ALLOY_TEMPO_URL=https://monitoring.ebsworx.dev/tempo
+      - ALLOY_AUTH_USERNAME=monitor
+      - ALLOY_AUTH_PASSWORD=bmbm0WlJE9nRog
+      - ALLOY_TLS_INSECURE=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./alloy.hcl:/etc/alloy/config.hcl:ro
       - ./alloy-data:/var/lib/alloy
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     networks:
       - django
-    expose:
+    ports:
+      # OTLP ingestion ports
       - "4317"
       - "4318"
+      # (optional) Alloy debug UI port
+      - "12345:12345"
 
   django:
     build:

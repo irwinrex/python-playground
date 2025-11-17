@@ -1,8 +1,9 @@
 
-from django.http import JsonResponse
-import time
-import logging
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
+import time,os,logging
 from opentelemetry import trace
+from django.conf import settings
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)

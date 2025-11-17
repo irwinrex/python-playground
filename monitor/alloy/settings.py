@@ -9,7 +9,6 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-from .telemetry import setup_telemetry
 from pathlib import Path
 import logging
 import os
@@ -19,7 +18,6 @@ from dotenv import load_dotenv
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-setup_telemetry()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -30,7 +28,7 @@ SECRET_KEY = 'django-insecure-l9!5kb3vzm#ik%6c*un1^zrw&vhk)j-cwxkk^k+kh%rqcsc+s2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -42,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
 ]
 
 MIDDLEWARE = [
@@ -126,27 +125,29 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
-            "format": (
-                '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
-                '"logger": "%(name)s", "message": "%(message)s"}'
-            ),
-        },
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "fmt": "%(levelname)s %(message)s trace_id=%(otelTraceID)s span_id=%(otelSpanID)s",
+        }
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "json",
-        },
+            "formatter": "json"
+        }
     },
     "root": {
         "handlers": ["console"],
         "level": "INFO",
     },
 }
+
+TELEMETRY_EXCLUDE_URL_NAMES = [
+    'prometheus-metrics',  # Exclude the metrics endpoint itself
+    'admin:index',         # Example: also exclude the admin index
+    'admin:login',
+]

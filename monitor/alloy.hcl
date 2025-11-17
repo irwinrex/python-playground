@@ -1,127 +1,116 @@
-discovery.docker "containers" {
+// -------------------------------------------------------------
+// OTLP RECEIVER (Django logs + traces)
+// -------------------------------------------------------------
+otelcol.receiver.otlp "django_otel" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  // Send logs + traces into the batch processors
+  output {
+    logs   = [otelcol.processor.batch.logs_batch.input]
+    traces = [otelcol.processor.batch.traces_batch.input]
+  }
+}
+
+// -------------------------------------------------------------
+// BATCH PROCESSORS
+// -------------------------------------------------------------
+otelcol.processor.batch "logs_batch" {
+  output {
+    logs = [otelcol.exporter.loki.django_loki.input]
+  }
+}
+
+otelcol.processor.batch "traces_batch" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// -------------------------------------------------------------
+// EXPORT LOGS → LOKI
+// -------------------------------------------------------------
+otelcol.exporter.loki "django_loki" {
+  forward_to = [loki.write.loki_push.receiver]
+}
+
+// -------------------------------------------------------------
+// AUTH
+// -------------------------------------------------------------
+// otelcol.auth.basic "tempo_auth" {
+//   username = env("ALLOY_AUTH_USERNAME")
+//   password = env("ALLOY_AUTH_PASSWORD")
+// }
+
+// -------------------------------------------------------------
+// EXPORT TRACES → TEMPO
+// -------------------------------------------------------------
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = env("ALLOY_TEMPO_URL")
+
+    // auth = tempo_auth
+
+    tls {
+      insecure_skip_verify = env("ALLOY_TLS_INSECURE") == "false"
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// LOKI SOURCE (Docker logs)
+// -------------------------------------------------------------
+loki.source.docker "docker_logs" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.docker.all.targets
+
+  forward_to = [loki.process.enrich_labels.receiver]
+}
+
+// -------------------------------------------------------------
+// DISCOVERY
+// -------------------------------------------------------------
+discovery.docker "all" {
   host = "unix:///var/run/docker.sock"
 }
 
-discovery.relabel "filter" {
-  targets = discovery.docker.containers.targets
+// -------------------------------------------------------------
+// PROCESS LOGS
+// -------------------------------------------------------------
+loki.process "enrich_labels" {
+  // stage.match {
+  //   selector = "{job=\"docker\"}"
+  //   stage.label_drop {
+  //     values = ["filename"]
+  //   }
+  // }
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "^(django.*|myapp.*)$"
-    action        = "keep"
-  }
+  // stage.match {
+  //   selector = "{job=\"docker\"}"
+  //   stage.labels {
+  //     values = {
+  //       local_service = "django-app",
+  //     }
+  //   }
+  // }
 
-  rule {
-    source_labels = ["__meta_docker_container_id"]
-    regex         = "(.*)"
-    target_label  = "__path__"
-    replacement   = "/var/lib/docker/containers/$1/$1-json.log"
-    action        = "replace"
-  }
+  forward_to = [loki.write.loki_push.receiver]
 }
 
-loki.source.file "docker_logs" {
-  targets    = discovery.relabel.filter.targets
-  forward_to = [loki.write.alloy_logs.receiver]
-}
-
-otelcol.receiver.otlp "django_app" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
-
-  http {
-    endpoint = "0.0.0.0:4318"
-  }
-
-  output {
-    logs    = [otelcol.processor.batch.alloy_batch.input]
-    metrics = [otelcol.processor.batch.alloy_batch.input]
-    traces  = [otelcol.processor.batch.alloy_batch.input]
-  }
-}
-
-otelcol.processor.batch "alloy_batch" {
-  timeout         = "5s"
-  send_batch_size = 2000
-
-  output {
-    logs    = [otelcol.exporter.loki.alloy_loki_exporter.input]
-    metrics = [otelcol.exporter.otlp.metrics_exporter.input]
-    traces  = [otelcol.exporter.otlp.traces_exporter.input]
-  }
-}
-
-otelcol.exporter.loki "alloy_loki_exporter" {
-  forward_to = [loki.write.alloy_logs.receiver]
-}
-
-loki.write "alloy_logs" {
+// -------------------------------------------------------------
+// LOKI WRITE ENDPOINT
+// -------------------------------------------------------------
+loki.write "loki_push" {
   endpoint {
-    url = env("ALLOY_BASE_URL") + "/v1/logs"
-  }
+    url = env("ALLOY_LOKI_URL")
 
-  headers = {
-    "Authorization" = env("ALLOY_AUTH_HEADER"),
-  }
-
-  tls {
-    insecure = (env("ALLOY_TLS_INSECURE") == "true")
-  }
-}
-
-otelcol.exporter.otlp "metrics_exporter" {
-  client {
-    endpoint = env("ALLOY_BASE_URL") + "/v1/metrics"
-
-    headers = {
-      "Authorization" = env("ALLOY_AUTH_HEADER"),
+    basic_auth {
+      username = env("ALLOY_AUTH_USERNAME")
+      password = env("ALLOY_AUTH_PASSWORD")
     }
 
-    tls {
-      insecure = (env("ALLOY_TLS_INSECURE") == "true")
+    tls_config {
+      insecure_skip_verify = true
     }
-  }
-
-  sending_queue {
-    enabled       = true
-    queue_size    = 20000
-    num_consumers = 4
-    storage       = "persistent"
-  }
-
-  retry_on_failure {
-    enabled          = true
-    initial_interval = "5s"
-    max_interval     = "30s"
-    max_elapsed_time = "15m"
-  }
-}
-
-otelcol.exporter.otlp "traces_exporter" {
-  client {
-    endpoint = env("ALLOY_BASE_URL") + "/v1/traces"
-
-    headers = {
-      "Authorization" = env("ALLOY_AUTH_HEADER"),
-    }
-
-    tls {
-      insecure = (env("ALLOY_TLS_INSECURE") == "true")
-    }
-  }
-
-  sending_queue {
-    enabled       = true
-    queue_size    = 20000
-    num_consumers = 4
-    storage       = "persistent"
-  }
-
-  retry_on_failure {
-    enabled          = true
-    initial_interval = "5s"
-    max_interval     = "30s"
-    max_elapsed_time = "15m"
   }
 }
