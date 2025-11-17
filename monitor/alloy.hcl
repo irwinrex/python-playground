@@ -57,45 +57,7 @@ otelcol.exporter.otlp "tempo" {
   }
 }
 
-// -------------------------------------------------------------
-// LOKI SOURCE (Docker logs)
-// -------------------------------------------------------------
-loki.source.docker "docker_logs" {
-  host = "unix:///var/run/docker.sock"
-  targets = discovery.docker.all.targets
 
-  forward_to = [loki.process.enrich_labels.receiver]
-}
-
-// -------------------------------------------------------------
-// DISCOVERY
-// -------------------------------------------------------------
-discovery.docker "all" {
-  host = "unix:///var/run/docker.sock"
-}
-
-// -------------------------------------------------------------
-// PROCESS LOGS
-// -------------------------------------------------------------
-loki.process "enrich_labels" {
-  // stage.match {
-  //   selector = "{job=\"docker\"}"
-  //   stage.label_drop {
-  //     values = ["filename"]
-  //   }
-  // }
-
-  // stage.match {
-  //   selector = "{job=\"docker\"}"
-  //   stage.labels {
-  //     values = {
-  //       local_service = "django-app",
-  //     }
-  //   }
-  // }
-
-  forward_to = [loki.write.loki_push.receiver]
-}
 
 // -------------------------------------------------------------
 // LOKI WRITE ENDPOINT
