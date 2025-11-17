@@ -7,7 +7,7 @@ otelcol.receiver.otlp "django_otel" {
 
   // Send logs + traces into the batch processors
   output {
-    logs   = [otelcol.processor.resourcedetection.add_env_label.input]
+    logs   = [otelcol.processor.resourcedetection.add_env_label.receiver]
     traces = [otelcol.processor.batch.traces_batch.input]
   }
 }
@@ -17,7 +17,7 @@ otelcol.receiver.otlp "django_otel" {
 // -------------------------------------------------------------
 otelcol.processor.resourcedetection "add_env_label" {
   detectors = ["static"]
-  static {
+  static_resource {
     attributes = {
       "app_env" = "local",
     }
@@ -64,7 +64,7 @@ otelcol.exporter.otlp "tempo" {
   client {
     endpoint = env("ALLOY_TEMPO_URL")
 
-    auth = otelcol.auth.basic.tempo_auth.output
+    auth = otelcol.auth.basic.tempo_auth.handler
 
     tls {
       insecure_skip_verify = env("ALLOY_TLS_INSECURE") == "false"
