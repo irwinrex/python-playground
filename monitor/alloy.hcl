@@ -7,7 +7,7 @@ otelcol.receiver.otlp "django_otel" {
 
   // Send logs + traces into the batch processors
   output {
-    logs   = [otelcol.processor.resourcedetection.add_env_label.receiver]
+    logs   = [otelcol.processor.resourcedetection.add_env_label.input]
     traces = [otelcol.processor.batch.traces_batch.input]
   }
 }
@@ -17,7 +17,7 @@ otelcol.receiver.otlp "django_otel" {
 // -------------------------------------------------------------
 otelcol.processor.resourcedetection "add_env_label" {
   detectors = ["static"]
-  static_resource {
+  static {
     attributes = {
       "app_env" = "local",
     }
