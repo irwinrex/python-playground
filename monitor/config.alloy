@@ -1,0 +1,81 @@
+otelcol.receiver.otlp "default" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  output {
+    logs    = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    logs    = [otelcol.processor.attributes.service.input]
+    metrics = [otelcol.processor.attributes.service.input]
+    traces  = [otelcol.processor.attributes.service.input]
+  }
+}
+
+otelcol.processor.attributes "service" {
+  action {
+    key    = "service.name"
+    action = "upsert"
+    value  = "django-test"
+  }
+  action {
+    key    = "deployment.environment"
+    action = "upsert"
+    value  = "local"
+  }
+  action {
+    key    = "loki.resource.labels"
+    action = "insert"
+    value  = "service.name,deployment.environment"
+  }
+  output {
+    logs    = [otelcol.exporter.loki.default.input]
+    metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.exporter.otlphttp.default.input]
+  }
+}
+
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.lgtm.receiver]
+}
+
+loki.write "lgtm" {
+  endpoint {
+    url = sys.env("ALLOY_LOKI_URL")
+    basic_auth {
+      username = sys.env("ALLOY_AUTH_USERNAME")
+      password = sys.env("ALLOY_AUTH_PASSWORD")
+    }
+  }
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.lgtm.receiver]
+}
+
+prometheus.remote_write "lgtm" {
+  endpoint {
+    url = sys.env("ALLOY_MIMIR_URL")
+    basic_auth {
+      username = sys.env("ALLOY_AUTH_USERNAME")
+      password = sys.env("ALLOY_AUTH_PASSWORD")
+    }
+  }
+}
+
+otelcol.exporter.otlphttp "default" {
+  client {
+    endpoint = sys.env("ALLOY_TEMPO_URL")
+    auth     = otelcol.auth.basic.default.handler
+  }
+}
+
+otelcol.auth.basic "default" {
+  username = sys.env("ALLOY_AUTH_USERNAME")
+  password = sys.env("ALLOY_AUTH_PASSWORD")
+}

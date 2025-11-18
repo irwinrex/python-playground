@@ -13,9 +13,10 @@ from pathlib import Path
 import logging
 import os
 from dotenv import load_dotenv
-
+from observability.otel_setup import *
 # Load environment variables from .env if present
 load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -40,7 +41,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
 ]
 
 MIDDLEWARE = [
@@ -51,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'observability.otel_middleware.OpenTelemetryLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'alloy.urls'
@@ -123,31 +124,39 @@ STATIC_URL = 'static/'
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# settings.py - Add this to your existing LOGGING configuration
 
 LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "fmt": "%(levelname)s %(message)s trace_id=%(otelTraceID)s span_id=%(otelSpanID)s",
-        }
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
     },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json"
-        }
+    'handlers': {
+        'console': {
+            'level': 'INFO',  # Reduce Django's console noise
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
     },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO",
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',  # Only show WARNING and above from Django
+            'propagate': False,
+        },
+        'django.utils.autoreload': {
+            'level': 'INFO',  # Reduce autoreload noise
+            'propagate': False,
+        },
+        # Add this to suppress the WSGIRequest warning
+        'opentelemetry.attributes': {
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
-
-TELEMETRY_EXCLUDE_URL_NAMES = [
-    'prometheus-metrics',  # Exclude the metrics endpoint itself
-    'admin:index',         # Example: also exclude the admin index
-    'admin:login',
-]
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

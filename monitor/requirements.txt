@@ -1,23 +1,18 @@
 # OpenTelemetry Core (aligned versions)
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0
-opentelemetry-exporter-otlp==1.27.0
-
-# Instrumentations (compatible versions)
-opentelemetry-instrumentation==0.48b0
+opentelemetry-exporter-otlp-proto-grpc==1.27.0
+# Instrumentations (minimal for performance)
 opentelemetry-instrumentation-django==0.48b0
-opentelemetry-instrumentation-requests==0.48b0
-opentelemetry-instrumentation-psycopg2==0.48b0
-opentelemetry-instrumentation-redis==0.48b0
 opentelemetry-instrumentation-logging==0.48b0
-
 # Semantic conventions
 opentelemetry-semantic-conventions==0.48b0
-
 # Django
 Django>=5.0,<6.0
 djangorestframework==3.14.0
 python-dotenv==1.0.1
-
-prometheus-client
-python-json-logger
+# Utilities
+prometheus-client # Still useful for specific custom metrics if needed
+python-json-logger # Excellent choice for structured logging
+# ADDED: Performance boost for gRPC
+grpcio==1.64.1

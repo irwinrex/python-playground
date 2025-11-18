@@ -1,93 +1,56 @@
-// -------------------------------------------------------------
-// OTLP RECEIVER (Django logs + traces)
-// -------------------------------------------------------------
-otelcol.receiver.otlp "django_otel" {
-  grpc { endpoint = "0.0.0.0:4317" }
-  http { endpoint = "0.0.0.0:4318" }
+// prometheus.remote_write "mimir" {
+//   endpoint {
+//     url = env("ALLOY_MIMIR_URL")
+//     basic_auth {
+//       username = env("ALLOY_AUTH_USERNAME")
+//       password = env("ALLOY_AUTH_PASSWORD")
+//     }
+//   }
+// }
+//
+// prometheus.scrape "django_app" {
+//   targets = [
+//     {"__address__" = "django:8000", "job" = "local-service"},
+//   ]
+//   forward_to = [prometheus.remote_write.mimir.receiver]
+// }
 
-  // Send logs + traces into the batch processors
-  output {
-    logs   = [otelcol.processor.resourcedetection.add_env_label.input]
-    traces = [otelcol.processor.batch.traces_batch.input]
-  }
+// -------------------------------------------------------------
+// Grafana Alloy → Loki (Docker logs) configuration
+// -------------------------------------------------------------
+
+// 1. Discover all Docker containers
+discovery.docker "all" {
+  host = "unix:///var/run/docker.sock"
 }
 
-// -------------------------------------------------------------
-// RESOURCE PROCESSOR (Add static labels/attributes)
-// -------------------------------------------------------------
-otelcol.processor.resourcedetection "add_env_label" {
+// 2. Scrape logs from Docker containers
+loki.source.docker "docker_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.all.targets
+  forward_to = [loki.process.enrich_labels.receiver]
+}
 
-  static {
-    attributes = {
-      "app_env" = "local",
+// 3. Enrich logs with custom labels (including service_name)
+loki.process "enrich_labels" {
+  stage.static_labels {
+    values = {
+      local_service = "django-app",
     }
   }
-  output {
-    logs = [otelcol.processor.batch.logs_batch.input]
-  }
+  forward_to = [loki.write.send_to_loki.receiver]
 }
 
-// -------------------------------------------------------------
-// BATCH PROCESSORS
-// -------------------------------------------------------------
-otelcol.processor.batch "logs_batch" {
-  output {
-    logs = [otelcol.exporter.loki.django_loki.input]
-  }
-}
-
-otelcol.processor.batch "traces_batch" {
-  output {
-    traces = [otelcol.exporter.otlp.tempo.input]
-  }
-}
-
-// -------------------------------------------------------------
-// EXPORT LOGS → LOKI
-// -------------------------------------------------------------
-otelcol.exporter.loki "django_loki" {
-  forward_to = [loki.write.loki_push.receiver]
-}
-
-// -------------------------------------------------------------
-// AUTH
-// -------------------------------------------------------------
-otelcol.auth.basic "tempo_auth" {
-  username = env("ALLOY_AUTH_USERNAME")
-  password = env("ALLOY_AUTH_PASSWORD")
-}
-
-// -------------------------------------------------------------
-// EXPORT TRACES → TEMPO
-// -------------------------------------------------------------
-otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = env("ALLOY_TEMPO_URL")
-
-    auth = otelcol.auth.basic.tempo_auth.handler
-
-    tls {
-      insecure_skip_verify = env("ALLOY_TLS_INSECURE") == "false"
-    }
-  }
-}
-
-
-
-// -------------------------------------------------------------
-// LOKI WRITE ENDPOINT
-// -------------------------------------------------------------
-loki.write "loki_push" {
+// 4. Write logs to Loki
+loki.write "send_to_loki" {
   endpoint {
     url = env("ALLOY_LOKI_URL")
-
     basic_auth {
       username = env("ALLOY_AUTH_USERNAME")
       password = env("ALLOY_AUTH_PASSWORD")
     }
-
     tls_config {
-      insecure_skip_verify = true
+      insecure_skip_verify = env("ALLOY_TLS_INSECURE") == "true"
     }
   }
 }

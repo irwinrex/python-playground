@@ -16,15 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from alloy import views
-from prometheus_client import generate_latest
-from django.http import HttpResponse
-
-def metrics_view(request):
-    return HttpResponse(generate_latest(), content_type='text/plain; version=0.0.4')
+from .views import health, slow_api
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("healthz/", views.health),
-    path("slow/", views.slow_api),
+    path("healthz/", health),
+    path("slow/", slow_api),
 ]
