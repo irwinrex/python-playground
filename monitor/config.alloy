@@ -68,10 +68,29 @@ prometheus.remote_write "lgtm" {
   }
 }
 
+otelcol.connector.spanmetrics "default" {
+  dimension {
+    name    = "http.method"
+    default = "GET"
+  }
+  histogram {
+    explicit {
+      buckets = ["50ms","100ms","250ms","1s","5s","10s"]
+    }
+  }
+  metrics_flush_interval = "15s"
+  namespace                = "traces.spanmetrics"
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
 otelcol.exporter.otlphttp "default" {
   client {
     endpoint = sys.env("ALLOY_TEMPO_URL")
     auth     = otelcol.auth.basic.default.handler
+    compression = "gzip"
+    timeout   = "10s"
   }
 }
 

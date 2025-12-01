@@ -13,7 +13,7 @@ from pathlib import Path
 import logging
 import os
 from dotenv import load_dotenv
-from observability.otel_setup import *
+# from observability.otel_setup import *
 # Load environment variables from .env if present
 load_dotenv()
 
@@ -51,7 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 'observability.otel_middleware.OpenTelemetryLoggingMiddleware',
+    'observability.otel_middleware.SmartLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'alloy.urls'

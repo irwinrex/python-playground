@@ -8,6 +8,10 @@ RUN set -ex \
   && apt-get update \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends \
+  pkg-config \
+  libmariadb-dev-compat \
+  gcc \
+  libmariadb-dev \
   libxml2-dev \
   libssl-dev \
   curl \

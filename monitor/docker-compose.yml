@@ -6,14 +6,14 @@ networks:
 
 services:
   grafana-alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.11.3
     container_name: grafana-alloy
     restart: unless-stopped
     command: ["run", "/etc/alloy/config.alloy"]
     environment:
-      - ALLOY_LOKI_URL=https://monitoring.ebsworx.dev/loki/loki/api/v1/push
-      - ALLOY_MIMIR_URL=https://monitoring.ebsworx.dev/mimir/api/v1/push
-      - ALLOY_TEMPO_URL=https://monitoring.ebsworx.dev/tempo
+      - ALLOY_LOKI_URL=https://monitoring.test.dev/loki/loki/api/v1/push
+      - ALLOY_MIMIR_URL=https://monitoring.test.dev/mimir/api/v1/push
+      - ALLOY_TEMPO_URL=https://monitoring.test.dev/tempo
       - ALLOY_AUTH_USERNAME=monitor
       - ALLOY_AUTH_PASSWORD=bmbm0WlJE9nRog
     volumes:
@@ -46,7 +46,7 @@ services:
       OTEL_SERVICE_NAMESPACE: backend
       OTEL_ENVIRONMENT: local
       # OTLP exporter configuration
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-alloy:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: grafana-alloy:4317
       OTEL_EXPORTER_OTLP_INSECURE: true
       # Batch processing configuration
       OTEL_BLRP_MAX_EXPORT_BATCH_SIZE: 512

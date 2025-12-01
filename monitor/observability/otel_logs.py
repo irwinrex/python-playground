@@ -1,85 +1,85 @@
 # observability/otel_logs.py
-import logging
 import os
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+
+# Disable ALL resource detectors
+os.environ["OTEL_RESOURCE_ATTRIBUTES"] = ""
+os.environ["OTEL_PYTHON_AUTOLOAD_ENABLED"] = "false"
+
+import atexit
+import logging
+
+from opentelemetry._logs import LogRecord
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk._logs import (
+    LoggerProvider,
+    LoggingHandler,
+    LogRecordProcessor,
+)
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.sdk.resources import Resource
-from opentelemetry._logs import LogRecord
 
-class CleanLogRecordProcessor(BatchLogRecordProcessor):
+
+# Resource (your metadata — keep or remove as needed)
+CLEAN_RESOURCE = Resource.create({
+    "service.name": os.getenv("OTEL_SERVICE_NAME", "django-app"),
+    "service.namespace": os.getenv("OTEL_SERVICE_NAMESPACE", "backend"),
+    "deployment.environment": os.getenv("OTEL_ENVIRONMENT", "development"),
+})
+
+
+class CleanProcessor(BatchLogRecordProcessor):
     def emit(self, log_record: LogRecord):
-        # Remove instrumentation scope completely
         log_record.instrumentation_scope = None
-        
-        # Remove auto-added code context attributes
-        if hasattr(log_record, 'attributes') and log_record.attributes:
-            # Keep only custom attributes, remove auto code context
-            filtered_attrs = {
+
+        # remove PII fields
+        if hasattr(log_record, "attributes") and log_record.attributes:
+            log_record.attributes = {
                 k: v for k, v in log_record.attributes.items()
-                if not k.startswith('code.')
+                if not any(s in k.lower() for s in ("authorization", "cookie", "password", "email"))
             }
-            log_record.attributes = filtered_attrs
-        
-        # Create a clean resource without SDK metadata
-        clean_resource = Resource.create({
-            "service.name": os.getenv("OTEL_SERVICE_NAME", "django-app"),
-            "service.namespace": os.getenv("OTEL_SERVICE_NAMESPACE", "backend"),
-            "deployment.environment": os.getenv("OTEL_ENVIRONMENT", "development")
-        })
-        
-        # Replace the resource with our clean version
-        log_record.resource = clean_resource
-        
-        # Call the original emit method
+
+        log_record.resource = CLEAN_RESOURCE
         super().emit(log_record)
 
+
 def setup_logging():
-    """Setup OpenTelemetry logging only"""
     try:
-        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://grafana-alloy:4317")
-        if not endpoint:
-            print("OTEL_EXPORTER_OTLP_ENDPOINT not set, skipping OpenTelemetry logging")
-            return
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "grafana-alloy:4317")
 
-        # Create clean resource
-        resource = Resource.create({
-            "service.name": os.getenv("OTEL_SERVICE_NAME", "django-app"),
-            "service.namespace": os.getenv("OTEL_SERVICE_NAMESPACE", "backend"),
-            "deployment.environment": os.getenv("OTEL_ENVIRONMENT", "development")
-        })
+        insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
 
-        provider = LoggerProvider(resource=resource)
+        provider = LoggerProvider(resource=CLEAN_RESOURCE)
+
+        # --------------------------
+        # gRPC EXPORTER (no HTTP)
+        # --------------------------
         exporter = OTLPLogExporter(
             endpoint=endpoint,
-            insecure=os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true",
+            insecure=insecure
         )
 
-        # Use the clean processor
-        processor = CleanLogRecordProcessor(
+        processor = CleanProcessor(
             exporter,
-            max_export_batch_size=512,
-            schedule_delay_millis=5000,
+            max_export_batch_size=int(os.getenv("OTEL_BLRP_MAX_EXPORT_BATCH_SIZE", "256")),
+            schedule_delay_millis=int(os.getenv("OTEL_BLRP_SCHEDULE_DELAY", "3000")),
         )
-        
+
         provider.add_log_record_processor(processor)
-        
-        # Use the standard LoggingHandler
+
         handler = LoggingHandler(logger_provider=provider)
-        
-        # Set log level
-        log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
-        log_level = getattr(logging, log_level_name, logging.INFO)
-        handler.setLevel(log_level)
 
-        # Add handler to root logger
-        root_logger = logging.getLogger()
-        root_logger.addHandler(handler)
-        root_logger.setLevel(log_level)
+        level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+        handler.setLevel(level)
 
-        print(f"OpenTelemetry logging configured for {endpoint}")
+        root = logging.getLogger()
+        root.addHandler(handler)
+        root.setLevel(level)
+
+        atexit.register(lambda: provider.shutdown())
+
+        print(f"OTEL gRPC log exporter configured → {endpoint}")
         return provider
 
     except Exception as e:
-        print(f"Failed to setup OpenTelemetry logging: {e}")
+        print("Failed to setup OTEL logging:", e)
         return None

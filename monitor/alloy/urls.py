@@ -16,10 +16,32 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import health, slow_api
+
+from .views import (
+    health,
+    slow_api,
+    redirect_api,
+    client_error_api,
+    forbidden_api,
+    server_error_api,
+    server_exception_api,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Health + Testing
     path("healthz/", health),
     path("slow/", slow_api),
+
+    # 3XX
+    path("redirect/", redirect_api),
+
+    # 4XX
+    path("bad-request/", client_error_api),
+    path("forbidden/", forbidden_api),
+
+    # 5XX
+    path("error/", server_error_api),
+    path("exception/", server_exception_api),
 ]
