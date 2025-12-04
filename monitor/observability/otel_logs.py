@@ -4,12 +4,9 @@ import os
 # Disable ALL resource detectors
 os.environ["OTEL_RESOURCE_ATTRIBUTES"] = ""
 os.environ["OTEL_PYTHON_AUTOLOAD_ENABLED"] = "false"
-
 import atexit
 import logging
-
 from opentelemetry._logs import LogRecord
-from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk._logs import (
     LoggerProvider,
     LoggingHandler,
@@ -19,14 +16,6 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 
 
-# Resource (your metadata — keep or remove as needed)
-CLEAN_RESOURCE = Resource.create({
-    "service.name": os.getenv("OTEL_SERVICE_NAME", "django-app"),
-    "service.namespace": os.getenv("OTEL_SERVICE_NAMESPACE", "backend"),
-    "deployment.environment": os.getenv("OTEL_ENVIRONMENT", "development"),
-})
-
-
 class CleanProcessor(BatchLogRecordProcessor):
     def emit(self, log_record: LogRecord):
         log_record.instrumentation_scope = None
@@ -34,11 +23,14 @@ class CleanProcessor(BatchLogRecordProcessor):
         # remove PII fields
         if hasattr(log_record, "attributes") and log_record.attributes:
             log_record.attributes = {
-                k: v for k, v in log_record.attributes.items()
-                if not any(s in k.lower() for s in ("authorization", "cookie", "password", "email"))
+                k: v
+                for k, v in log_record.attributes.items()
+                if not any(
+                    s in k.lower()
+                    for s in ("authorization", "cookie", "password", "email")
+                )
             }
 
-        log_record.resource = CLEAN_RESOURCE
         super().emit(log_record)
 
 
@@ -48,19 +40,18 @@ def setup_logging():
 
         insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
 
-        provider = LoggerProvider(resource=CLEAN_RESOURCE)
+        provider = LoggerProvider()
 
         # --------------------------
         # gRPC EXPORTER (no HTTP)
         # --------------------------
-        exporter = OTLPLogExporter(
-            endpoint=endpoint,
-            insecure=insecure
-        )
+        exporter = OTLPLogExporter(endpoint=endpoint, insecure=insecure)
 
         processor = CleanProcessor(
             exporter,
-            max_export_batch_size=int(os.getenv("OTEL_BLRP_MAX_EXPORT_BATCH_SIZE", "256")),
+            max_export_batch_size=int(
+                os.getenv("OTEL_BLRP_MAX_EXPORT_BATCH_SIZE", "256")
+            ),
             schedule_delay_millis=int(os.getenv("OTEL_BLRP_SCHEDULE_DELAY", "3000")),
         )
 
