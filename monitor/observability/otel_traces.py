@@ -3,7 +3,6 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.django import DjangoInstrumentor
 
 try:
@@ -11,16 +10,13 @@ try:
 except ImportError:
     RedisInstrumentor = None
 
+
 def setup_tracing():
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
         return
 
-    resource = Resource.create({
-        "service.name": os.getenv("OTEL_SERVICE_NAME", "django-app")
-    })
-
-    provider = TracerProvider(resource=resource)
+    provider = TracerProvider()
     exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
