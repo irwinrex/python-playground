@@ -1,4 +1,4 @@
-train/__*
+__*
 *.pyc
 alloy-data
 db.sqlite3

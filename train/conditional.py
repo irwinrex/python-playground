@@ -19,7 +19,7 @@ if a>b:
 else:
     print(f"{a} is smaller than {b}")
 
-# Elif
+# Eljif
     
 m = 2
 v = 2

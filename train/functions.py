@@ -1,4 +1,4 @@
-# Funtions is a block of code , in python curly brackets , we use indentations with tabs or spaces
+# untions is a block of code , in python curly brackets , we use indentations with tabs or spaces
 
 # Create funtions
 
