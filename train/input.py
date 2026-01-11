@@ -23,7 +23,7 @@ import os,sys
 # except ZeroDivisionError:
 #     print("Do not try to divide by 0")
 
-def list_files (files):
+def list_files (files: str):
     try:
         file = os.listdir(files)
         return file, None
